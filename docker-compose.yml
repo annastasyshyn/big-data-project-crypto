@@ -239,6 +239,37 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
+  batch-scheduler:
+    build: ./batch
+    container_name: batch-scheduler
+    environment:
+      SPARK_MASTER: spark://spark-master:7077
+      BATCH_JOBS_DIR: /opt/spark/jobs/batch
+      CASSANDRA_HOST: cassandra
+      CASSANDRA_KEYSPACE: crypto
+      RUN_ON_STARTUP: "true"
+      HOURLY_REPORT_CRON: "5 * * * *"
+      TRADING_PATTERNS_CRON: "*/30 * * * *"
+      WHALE_IMPACT_CRON: "15 * * * *"
+      HOURLY_REPORT_HOURS_BACK: "12"
+      WHALE_IMPACT_HOURS: "24"
+      WHALE_IMPACT_WINDOW_SECONDS: "300"
+      WHALE_IMPACT_PERCENTILE: "0.90"
+      JOB_TIMEOUT_SECONDS: "1800"
+    volumes:
+      - ./batch:/opt/spark/jobs/batch
+      - batch_ivy:/tmp/.ivy2
+    depends_on:
+      kafka:
+        condition: service_healthy
+      cassandra:
+        condition: service_healthy
+      spark-master:
+        condition: service_started
+      cassandra-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
   ingestion:
     build: ./ingestion
     container_name: ingestion
@@ -262,3 +293,4 @@ services:
 volumes:
   kafka_data:
   cassandra_data:
+  batch_ivy:
