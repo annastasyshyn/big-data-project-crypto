@@ -108,8 +108,8 @@ services:
     entrypoint: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077"]
     environment:
       SPARK_NO_DAEMONIZE: "true"
-      SPARK_WORKER_MEMORY: 2g
-      SPARK_WORKER_CORES: "2"
+      SPARK_WORKER_MEMORY: 4g
+      SPARK_WORKER_CORES: "4"
     depends_on:
       - spark-master
     volumes:
@@ -123,6 +123,9 @@ services:
       "--packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,com.datastax.spark:spark-cassandra-connector_2.12:3.5.0",
       "--master", "spark://spark-master:7077",
       "--conf", "spark.jars.ivy=/tmp/.ivy2",
+      "--conf", "spark.cores.max=2",
+      "--conf", "spark.executor.cores=1",
+      "--conf", "spark.executor.memory=1g",
       "--conf", "spark.cassandra.connection.host=cassandra",
       "/opt/spark/jobs/streaming/trades_sink.py"
     ]
@@ -153,6 +156,9 @@ services:
       "--packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,com.datastax.spark:spark-cassandra-connector_2.12:3.5.0",
       "--master", "spark://spark-master:7077",
       "--conf", "spark.jars.ivy=/tmp/.ivy2",
+      "--conf", "spark.cores.max=1",
+      "--conf", "spark.executor.cores=1",
+      "--conf", "spark.executor.memory=512m",
       "--conf", "spark.cassandra.connection.host=cassandra",
       "/opt/spark/jobs/streaming/whale_alert.py"
     ]
@@ -180,6 +186,9 @@ services:
       "--packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,com.datastax.spark:spark-cassandra-connector_2.12:3.5.0",
       "--master", "spark://spark-master:7077",
       "--conf", "spark.jars.ivy=/tmp/.ivy2",
+      "--conf", "spark.cores.max=1",
+      "--conf", "spark.executor.cores=1",
+      "--conf", "spark.executor.memory=512m",
       "--conf", "spark.cassandra.connection.host=cassandra",
       "/opt/spark/jobs/streaming/volatility_monitor.py"
     ]
@@ -207,6 +216,9 @@ services:
       "--packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,com.datastax.spark:spark-cassandra-connector_2.12:3.5.0",
       "--master", "spark://spark-master:7077",
       "--conf", "spark.jars.ivy=/tmp/.ivy2",
+      "--conf", "spark.cores.max=1",
+      "--conf", "spark.executor.cores=1",
+      "--conf", "spark.executor.memory=512m",
       "--conf", "spark.cassandra.connection.host=cassandra",
       "/opt/spark/jobs/streaming/market_momentum.py"
     ]
