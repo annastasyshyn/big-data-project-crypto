@@ -1,0 +1,252 @@
+
+services:
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    hostname: kafka
+    container_name: kafka
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_LOG_DIRS: "/var/lib/kafka/data"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      "
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic raw-trades --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic whale-alerts --partitions 1 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic volatility-alerts --partitions 1 --replication-factor 1
+      echo 'Topics created.'
+      "
+
+  cassandra:
+    image: cassandra:4.1
+    container_name: cassandra
+    ports:
+      - "9042:9042"
+    environment:
+      CASSANDRA_CLUSTER_NAME: crypto-cluster
+      CASSANDRA_DC: dc1
+      CASSANDRA_ENDPOINT_SNITCH: SimpleSnitch
+      MAX_HEAP_SIZE: "512M"
+      HEAP_NEWSIZE: "128M"
+    volumes:
+      - cassandra_data:/var/lib/cassandra
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+  
+  cassandra-init:
+    image: cassandra:4.1
+    container_name: cassandra-init
+    depends_on:
+      cassandra:
+        condition: service_healthy
+    volumes:
+      - ./dependencies/cassandra/init.cql:/init.cql
+    entrypoint: ["cqlsh"]
+    command: ["cassandra", "9042", "-f", "/init.cql"]
+
+  spark-master:
+    image: apache/spark:3.5.5
+    container_name: spark-master
+    entrypoint: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master"]
+    environment:
+      SPARK_NO_DAEMONIZE: "true"
+    ports:
+      - "8181:8080"
+      - "7077:7077"
+    volumes:
+      - ./streaming:/opt/spark/jobs/streaming
+      - ./batch:/opt/spark/jobs/batch
+
+  spark-worker:
+    image: apache/spark:3.5.5
+    container_name: spark-worker
+    entrypoint: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077"]
+    environment:
+      SPARK_NO_DAEMONIZE: "true"
+      SPARK_WORKER_MEMORY: 2g
+      SPARK_WORKER_CORES: "2"
+    depends_on:
+      - spark-master
+    volumes:
+      - ./streaming:/opt/spark/jobs/streaming
+      - ./batch:/opt/spark/jobs/batch
+  trades-sink:
+    image: apache/spark:3.5.5
+    container_name: trades-sink
+    entrypoint: [
+      "/opt/spark/bin/spark-submit",
+      "--packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,com.datastax.spark:spark-cassandra-connector_2.12:3.5.0",
+      "--master", "spark://spark-master:7077",
+      "--conf", "spark.jars.ivy=/tmp/.ivy2",
+      "--conf", "spark.cassandra.connection.host=cassandra",
+      "/opt/spark/jobs/streaming/trades_sink.py"
+    ]
+    environment:
+      KAFKA_BROKER: kafka:9092
+      CASSANDRA_HOST: cassandra
+      CASSANDRA_KEYSPACE: crypto
+      TRADES_SINK_CHECKPOINT: /opt/spark/checkpoints/trades-sink
+    volumes:
+      - ./streaming:/opt/spark/jobs/streaming
+      - ./streaming/checkpoints/trades-sink:/opt/spark/checkpoints/trades-sink
+    depends_on:
+      kafka:
+        condition: service_healthy
+      cassandra:
+        condition: service_healthy
+      spark-master:
+        condition: service_started
+      cassandra-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  whale-alerts:
+    image: apache/spark:3.5.5
+    container_name: whale-alerts
+    entrypoint: [
+      "/opt/spark/bin/spark-submit",
+      "--packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,com.datastax.spark:spark-cassandra-connector_2.12:3.5.0",
+      "--master", "spark://spark-master:7077",
+      "--conf", "spark.jars.ivy=/tmp/.ivy2",
+      "--conf", "spark.cassandra.connection.host=cassandra",
+      "/opt/spark/jobs/streaming/whale_alert.py"
+    ]
+    environment:
+      KAFKA_BROKER: kafka:9092
+      CASSANDRA_HOST: cassandra
+    volumes:
+      - ./streaming:/opt/spark/jobs/streaming
+    depends_on:
+      kafka:
+        condition: service_healthy
+      cassandra:
+        condition: service_healthy
+      spark-master:
+        condition: service_started
+      cassandra-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  volatility-alerts:
+    image: apache/spark:3.5.5
+    container_name: volatility-alerts
+    entrypoint: [
+      "/opt/spark/bin/spark-submit",
+      "--packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,com.datastax.spark:spark-cassandra-connector_2.12:3.5.0",
+      "--master", "spark://spark-master:7077",
+      "--conf", "spark.jars.ivy=/tmp/.ivy2",
+      "--conf", "spark.cassandra.connection.host=cassandra",
+      "/opt/spark/jobs/streaming/volatility_monitor.py"
+    ]
+    environment:
+      KAFKA_BROKER: kafka:9092
+      CASSANDRA_HOST: cassandra
+    volumes:
+      - ./streaming:/opt/spark/jobs/streaming
+    depends_on:
+      kafka:
+        condition: service_healthy
+      cassandra:
+        condition: service_healthy
+      spark-master:
+        condition: service_started
+      cassandra-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  market-momentum:
+    image: apache/spark:3.5.5
+    container_name: market-momentum
+    entrypoint: [
+      "/opt/spark/bin/spark-submit",
+      "--packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,com.datastax.spark:spark-cassandra-connector_2.12:3.5.0",
+      "--master", "spark://spark-master:7077",
+      "--conf", "spark.jars.ivy=/tmp/.ivy2",
+      "--conf", "spark.cassandra.connection.host=cassandra",
+      "/opt/spark/jobs/streaming/market_momentum.py"
+    ]
+    environment:
+      KAFKA_BROKER: kafka:9092
+      CASSANDRA_HOST: cassandra
+      CASSANDRA_KEYSPACE: crypto
+    volumes:
+      - ./streaming:/opt/spark/jobs/streaming
+    depends_on:
+      kafka:
+        condition: service_healthy
+      cassandra:
+        condition: service_healthy
+      spark-master:
+        condition: service_started
+      cassandra-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  ingestion:
+    build: ./ingestion
+    container_name: ingestion
+    env_file: .env
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+
+  api:
+    build: ./api
+    container_name: api
+    env_file: .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      cassandra:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  kafka_data:
+  cassandra_data:
