@@ -274,20 +274,31 @@ services:
     build: ./ingestion
     container_name: ingestion
     env_file: .env
+    environment:
+      KAFKA_BROKER: kafka:9092
+      SYMBOLS: XBTUSD,ETHUSD
+      BITMEX_WS_URL: wss://ws.bitmex.com/realtime
     depends_on:
       kafka:
         condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   api:
     build: ./api
     container_name: api
     env_file: .env
+    environment:
+      CASSANDRA_HOST: cassandra
+      CASSANDRA_KEYSPACE: crypto
     ports:
       - "8000:8000"
     depends_on:
       cassandra:
         condition: service_healthy
+      cassandra-init:
+        condition: service_completed_successfully
     restart: unless-stopped
 
 volumes:
