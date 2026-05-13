@@ -39,6 +39,7 @@ raw = (
     .option("kafka.bootstrap.servers", KAFKA_BROKER)
     .option("subscribe", "raw-trades")
     .option("startingOffsets", "latest")
+    .option("failOnDataLoss", "false")
     .load()
 )
 
