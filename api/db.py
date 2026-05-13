@@ -7,8 +7,7 @@ from cassandra.cluster import Cluster, Session
 
 log = logging.getLogger(__name__)
 
-# Support both CASSANDRA_HOSTS (preferred) and CASSANDRA_HOST (single) for parity
-# with other services in docker-compose.
+
 _HOSTS_RAW = os.getenv("CASSANDRA_HOSTS") or os.getenv("CASSANDRA_HOST") or "cassandra"
 CASSANDRA_HOSTS = [h.strip() for h in _HOSTS_RAW.split(",") if h.strip()]
 CASSANDRA_PORT = int(os.getenv("CASSANDRA_PORT", "9042"))
@@ -23,7 +22,6 @@ _session: Optional[Session] = None
 
 
 def connect() -> Session:
-    """Open a Cassandra session with retry; safe to call once on startup."""
     global _cluster, _session
     if _session is not None:
         return _session

@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 
 from db import connect, get_session, shutdown
-from routers import analytics, reports
+from routers import analytics, prices, reports, trades
 
 load_dotenv()
 
@@ -34,6 +34,8 @@ app = FastAPI(
 
 app.include_router(reports.router, prefix="/api", tags=["reports"])
 app.include_router(analytics.router, prefix="/api", tags=["analytics"])
+app.include_router(prices.router, prefix="/api", tags=["prices"])
+app.include_router(trades.router, prefix="/api", tags=["trades"])
 
 
 @app.get("/health", tags=["meta"])

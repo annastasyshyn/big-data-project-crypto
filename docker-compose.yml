@@ -108,8 +108,8 @@ services:
     entrypoint: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077"]
     environment:
       SPARK_NO_DAEMONIZE: "true"
-      SPARK_WORKER_MEMORY: 4g
-      SPARK_WORKER_CORES: "4"
+      SPARK_WORKER_MEMORY: 5g
+      SPARK_WORKER_CORES: "5"
     depends_on:
       - spark-master
     volumes:
@@ -123,7 +123,7 @@ services:
       "--packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,com.datastax.spark:spark-cassandra-connector_2.12:3.5.0",
       "--master", "spark://spark-master:7077",
       "--conf", "spark.jars.ivy=/tmp/.ivy2",
-      "--conf", "spark.cores.max=2",
+      "--conf", "spark.cores.max=1",
       "--conf", "spark.executor.cores=1",
       "--conf", "spark.executor.memory=1g",
       "--conf", "spark.cassandra.connection.host=cassandra",
@@ -165,8 +165,10 @@ services:
     environment:
       KAFKA_BROKER: kafka:9092
       CASSANDRA_HOST: cassandra
+      WHALE_ALERT_CHECKPOINT: /opt/spark/checkpoints/whale-alert
     volumes:
       - ./streaming:/opt/spark/jobs/streaming
+      - ./streaming/checkpoints/whale-alert:/opt/spark/checkpoints/whale-alert
     depends_on:
       kafka:
         condition: service_healthy
@@ -195,8 +197,10 @@ services:
     environment:
       KAFKA_BROKER: kafka:9092
       CASSANDRA_HOST: cassandra
+      VOLATILITY_ALERT_CHECKPOINT: /opt/spark/checkpoints/volatility-alerts
     volumes:
       - ./streaming:/opt/spark/jobs/streaming
+      - ./streaming/checkpoints/volatility-alerts:/opt/spark/checkpoints/volatility-alerts
     depends_on:
       kafka:
         condition: service_healthy
@@ -226,8 +230,10 @@ services:
       KAFKA_BROKER: kafka:9092
       CASSANDRA_HOST: cassandra
       CASSANDRA_KEYSPACE: crypto
+      MARKET_MOMENTUM_CHECKPOINT: /opt/spark/checkpoints/market-momentum
     volumes:
       - ./streaming:/opt/spark/jobs/streaming
+      - ./streaming/checkpoints/market-momentum:/opt/spark/checkpoints/market-momentum
     depends_on:
       kafka:
         condition: service_healthy
@@ -255,6 +261,7 @@ services:
       WHALE_IMPACT_HOURS: "24"
       WHALE_IMPACT_WINDOW_SECONDS: "300"
       WHALE_IMPACT_PERCENTILE: "0.90"
+      BATCH_JOB_CORES_MAX: "1"
       JOB_TIMEOUT_SECONDS: "1800"
     volumes:
       - ./batch:/opt/spark/jobs/batch

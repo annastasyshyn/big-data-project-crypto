@@ -218,3 +218,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project runtime artifacts
+streaming/checkpoints/
+*.crc
+
+# Local AI tooling settings
+.claude/

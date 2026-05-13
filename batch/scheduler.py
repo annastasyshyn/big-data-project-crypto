@@ -23,6 +23,7 @@ PACKAGES = os.getenv(
 )
 CASSANDRA_HOST = os.getenv("CASSANDRA_HOST", "cassandra")
 KEYSPACE = os.getenv("CASSANDRA_KEYSPACE", "crypto")
+BATCH_JOB_CORES_MAX = int(os.getenv("BATCH_JOB_CORES_MAX", "1"))
 
 JOB_TIMEOUT_SECONDS = int(os.getenv("JOB_TIMEOUT_SECONDS", "1800"))
 RUN_ON_STARTUP = os.getenv("RUN_ON_STARTUP", "true").lower() in {"1", "true", "yes"}
@@ -37,19 +38,19 @@ JOBS = {
         "script": "hourly_report.py",
         "cron": HOURLY_CRON,
         "executor_memory": "1g",
-        "cores_max": 2,
+        "cores_max": BATCH_JOB_CORES_MAX,
     },
     "trading_patterns": {
         "script": "trading_patterns.py",
         "cron": PATTERNS_CRON,
         "executor_memory": "1g",
-        "cores_max": 2,
+        "cores_max": BATCH_JOB_CORES_MAX,
     },
     "whale_impact": {
         "script": "whale_impact.py",
         "cron": WHALE_CRON,
         "executor_memory": "1g",
-        "cores_max": 2,
+        "cores_max": BATCH_JOB_CORES_MAX,
     },
 }
 
